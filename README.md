@@ -1,5 +1,7 @@
 # Ayu Wallet DApp
+## Deployment
 
+Ayu Wallet is currently deployed through GitHub Pages for Sepolia testnet integration testing.
 Ayu Wallet is a non-custodial Ethereum wallet DApp using MetaMask, ethers.js v6, and the deployed Ayu Wallet contract on Sepolia.
 
 ## Features
