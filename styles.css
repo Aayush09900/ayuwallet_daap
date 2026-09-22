@@ -60,3 +60,9 @@ body:not(.matrix-mode) .matrix-grid{opacity:.035}
 .history-summary{margin:-6px 0 14px;color:#7f88a7;font-size:11px}
 .section-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 @media(max-width:800px){.contract-submetrics{grid-template-columns:1fr}}
+
+.status-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.status-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.status-toolbar .status-message{margin:0}
+.ghost-btn:disabled,.action-card:disabled,.connect-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+@media(max-width:700px){.status-toolbar{align-items:stretch}.status-actions{width:100%}.status-actions .ghost-btn{flex:1}}
