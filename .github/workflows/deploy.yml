@@ -1,7 +1,9 @@
 name: Deploy Ayu Wallet
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Validate Ayu Wallet"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -16,19 +18,34 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout validated revision
         uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
+      - name: Build deployable site
+        run: |
+          rm -rf site
+          mkdir -p site
+          cp index.html styles.css index.js config.js abi.json site/
+          touch site/.nojekyll
+          echo "Prepared clean GitHub Pages artifact."
+
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: site
+
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4
