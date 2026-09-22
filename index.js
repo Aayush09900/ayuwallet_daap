@@ -31,6 +31,8 @@
     healthNetwork: $('healthNetwork'),
     healthFrozen: $('healthFrozen'),
     healthContract: $('healthContract'),
+    healthOwner: $('healthOwner'),
+    depositAvailability: $('depositAvailability'),
     contactAddress: $('contactAddress'),
     contactStatus: $('contactStatus')
   };
@@ -60,7 +62,7 @@
   }
 
   function initMatrixMode() {
-    const stored = localStorage.getItem('ayu-matrix-view');
+    const stored = sessionStorage.getItem('ayu-matrix-view');
     const enabled = stored !== 'off';
     document.body.classList.toggle('matrix-mode', enabled);
     if (els.matrixToggle) {
@@ -72,7 +74,7 @@
   function toggleMatrixMode() {
     const enabled = !document.body.classList.contains('matrix-mode');
     document.body.classList.toggle('matrix-mode', enabled);
-    localStorage.setItem('ayu-matrix-view', enabled ? 'on' : 'off');
+    sessionStorage.setItem('ayu-matrix-view', enabled ? 'on' : 'off');
     if (els.matrixToggle) {
       els.matrixToggle.textContent = `Matrix View: ${enabled ? 'ON' : 'OFF'}`;
       els.matrixToggle.setAttribute('aria-pressed', String(enabled));
@@ -81,15 +83,16 @@
 
   async function loadABI() {
     if (abi) return abi;
-    const response = await fetch('./abi.json', { cache: 'no-store' });
+    const response = await fetch('./abi.json', { cache: 'no-store', credentials: 'omit' });
     if (!response.ok) throw new Error(`ABI request failed (${response.status})`);
     abi = await response.json();
+    if (!Array.isArray(abi) || abi.length === 0) throw new Error('Invalid contract ABI.');
     return abi;
   }
 
   function hasMetaMask() {
     if (!window.ethereum) {
-      status('❌ MetaMask is not installed');
+      status('MetaMask is not installed.');
       return false;
     }
     return true;
@@ -99,7 +102,7 @@
     const chainId = await window.ethereum.request({ method: 'eth_chainId' });
     if (chainId === SEPOLIA_CHAIN_ID) return true;
 
-    status('⚠️ Switching to Sepolia...');
+    status('Switching to Sepolia...');
     try {
       await window.ethereum.request({
         method: 'wallet_switchEthereumChain',
@@ -123,16 +126,14 @@
 
   async function verifyContract() {
     const code = await provider.getCode(CONTRACT_ADDRESS);
-    if (code === '0x') {
-      throw new Error('No contract bytecode found at the configured address on Sepolia.');
-    }
+    if (code === '0x') throw new Error('Configured Ayu Wallet contract was not found on Sepolia.');
   }
 
   async function connectWallet() {
     if (!hasMetaMask()) return;
 
     try {
-      status('🔄 Connecting wallet...');
+      status('Connecting wallet...');
       await loadABI();
       await window.ethereum.request({ method: 'eth_requestAccounts' });
       await ensureSepolia();
@@ -153,11 +154,10 @@
       if (els.networkDot) els.networkDot.style.background = 'var(--success)';
 
       await refreshDashboard();
-      status('✅ Wallet connected');
+      status('Wallet connected.');
     } catch (error) {
-      console.error(error);
       resetWalletUI();
-      status(`❌ ${friendlyError(error, 'Wallet connection failed')}`);
+      status(friendlyError(error, 'Wallet connection failed.'));
     }
   }
 
@@ -173,6 +173,10 @@
     setText(els.withdrawals, '0.0000 ETH');
     setText(els.transfers, '0');
     setText(els.healthContractTop, shortAddress(CONTRACT_ADDRESS));
+    setText(els.healthFrozen, '—');
+    setText(els.healthOwner, 'Contract status will appear after connection.');
+    setText(els.depositAvailability, 'Available wallet balance: —');
+    setText(els.contactStatus, 'No contact checked. Trusted contacts are on-chain and publicly observable.');
 
     if (els.connect) els.connect.textContent = 'Connect Wallet';
     if (els.networkDot) els.networkDot.style.background = 'var(--danger)';
@@ -180,7 +184,6 @@
 
   async function refreshDashboard() {
     if (!contract || !userAddress) return;
-
     await Promise.all([
       loadBalances(),
       loadStatistics(),
@@ -195,11 +198,9 @@
       contract.balances(userAddress)
     ]);
 
-    // Keep these two balances intentionally separate:
-    // 1) MetaMask/native wallet balance
-    // 2) User balance recorded inside the Ayu Wallet contract
     setText(els.walletBalance, formatEth(walletValue));
     setText(els.contractUserBalance, formatEth(contractAccountValue));
+    setText(els.depositAvailability, `Available wallet balance: ${formatEth(walletValue)} ETH`);
   }
 
   async function loadStatistics() {
@@ -210,7 +211,6 @@
       contract.totalTransfers()
     ]);
 
-    // Contract TVL is global contract balance, not the connected wallet balance.
     setText(els.contractBalance, `${formatEth(contractValue)} ETH`);
     setText(els.deposits, `${formatEth(deposited)} ETH`);
     setText(els.withdrawals, `${formatEth(withdrawn)} ETH`);
@@ -218,10 +218,9 @@
   }
 
   async function loadHealth() {
-    const [frozen, contractValue, owner] = await Promise.all([
+    const [frozen, contractValue] = await Promise.all([
       contract.frozen(),
-      contract.getContractBalance(),
-      contract.owner()
+      contract.getContractBalance()
     ]);
 
     setText(els.healthNetwork, 'Sepolia');
@@ -229,10 +228,66 @@
     setText(els.healthContract, shortAddress(CONTRACT_ADDRESS));
     setText(els.healthContractTop, shortAddress(CONTRACT_ADDRESS));
 
-    const ownerNote = $('healthOwner');
-    if (ownerNote) {
-      ownerNote.textContent = `Owner: ${shortAddress(owner)} · TVL: ${formatEth(contractValue)} ETH`;
+    if (els.healthOwner) {
+      els.healthOwner.textContent = `Live contract TVL: ${formatEth(contractValue)} ETH · Status: ${frozen ? 'Frozen' : 'Active'}`;
     }
+  }
+
+  function clearActivity() {
+    if (!els.activity) return;
+    while (els.activity.firstChild) els.activity.removeChild(els.activity.firstChild);
+  }
+
+  function renderActivity(rows) {
+    clearActivity();
+
+    if (!rows.length) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'empty-state';
+
+      const icon = document.createElement('div');
+      icon.className = 'empty-icon';
+      icon.textContent = '◇';
+
+      const title = document.createElement('p');
+      title.textContent = 'No transactions yet';
+
+      const note = document.createElement('span');
+      note.textContent = 'Your confirmed contract activity will appear here.';
+
+      wrapper.append(icon, title, note);
+      els.activity.appendChild(wrapper);
+      return;
+    }
+
+    rows.slice(0, 10).forEach((row) => {
+      const item = document.createElement('div');
+      item.className = 'activity-row';
+
+      const left = document.createElement('div');
+      const title = document.createElement('strong');
+      title.textContent = row.type;
+
+      const meta = document.createElement('div');
+      meta.className = 'activity-meta';
+      meta.textContent = `Block ${row.block} · `;
+
+      const link = document.createElement('a');
+      link.href = explorerTx(row.hash);
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'View tx';
+      meta.appendChild(link);
+
+      left.append(title, meta);
+
+      const amount = document.createElement('span');
+      amount.className = 'activity-amount';
+      amount.textContent = `${ethers.formatEther(row.amount)} ETH`;
+
+      item.append(left, amount);
+      els.activity.appendChild(item);
+    });
   }
 
   async function loadRecentActivity() {
@@ -265,7 +320,11 @@
       }));
 
       transfers
-        .filter((event) => event.args.from.toLowerCase() === me || event.args.to.toLowerCase() === me)
+        .filter((event) => {
+          const from = event.args?.from?.toLowerCase();
+          const to = event.args?.to?.toLowerCase();
+          return from === me || to === me;
+        })
         .forEach((event) => rows.push({
           type: event.args.from.toLowerCase() === me ? 'Sent' : 'Received',
           amount: event.args.amount,
@@ -274,63 +333,75 @@
         }));
 
       rows.sort((a, b) => b.block - a.block);
+      renderActivity(rows);
+    } catch {
+      clearActivity();
+      const wrapper = document.createElement('div');
+      wrapper.className = 'empty-state';
 
-      if (!rows.length) {
-        els.activity.innerHTML = '<div class="empty-state"><div class="empty-icon">◇</div><p>No transactions yet</p><span>Your confirmed contract events will appear here.</span></div>';
-        return;
-      }
+      const title = document.createElement('p');
+      title.textContent = 'Activity temporarily unavailable';
 
-      els.activity.innerHTML = rows.slice(0, 10).map((row) => `
-        <div style="display:flex;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid rgba(255,255,255,.08)">
-          <div>
-            <strong>${row.type}</strong>
-            <div style="font-size:11px;color:#9da3bd">Block ${row.block} · <a href="${explorerTx(row.hash)}" target="_blank" rel="noopener noreferrer" style="color:#a78bfa">View tx</a></div>
-          </div>
-          <span style="font-family:monospace">${ethers.formatEther(row.amount)} ETH</span>
-        </div>
-      `).join('');
-    } catch (error) {
-      console.warn('Activity history could not be loaded:', error);
-      els.activity.innerHTML = '<div class="empty-state"><p>Activity temporarily unavailable</p><span>Refresh after the Sepolia RPC responds.</span></div>';
+      const note = document.createElement('span');
+      note.textContent = 'Refresh after the Sepolia provider responds.';
+
+      wrapper.append(title, note);
+      els.activity.appendChild(wrapper);
     }
   }
 
   function getAmount(id) {
     const raw = $(id)?.value?.trim();
-    if (!raw || Number(raw) <= 0) throw new Error('Enter a valid ETH amount.');
+    if (!raw || !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(raw) || Number(raw) <= 0) {
+      throw new Error('Enter a valid positive ETH amount.');
+    }
     return ethers.parseEther(raw);
+  }
+
+  async function validateWalletAmount(value) {
+    const walletBalance = await provider.getBalance(userAddress);
+    if (value > walletBalance) {
+      throw new Error('Amount exceeds your MetaMask wallet balance.');
+    }
+    return walletBalance;
   }
 
   async function runTransaction(label, action) {
     if (!contract) {
-      status('⚠️ Connect wallet first');
+      status('Connect wallet first.');
       return null;
     }
 
     try {
-      status(`⏳ ${label} awaiting MetaMask...`);
+      status(`${label}: confirm the transaction in MetaMask.`);
       const tx = await action();
-      status(`⏳ ${label} pending: ${shortHash(tx.hash)}`);
+      status(`${label} pending: ${shortHash(tx.hash)}`);
       await tx.wait();
-      status(`✅ ${label} confirmed`);
+      status(`${label} confirmed.`);
       await refreshDashboard();
       return tx;
     } catch (error) {
-      console.error(error);
-      status(`❌ ${friendlyError(error, `${label} failed`)}`);
+      status(friendlyError(error, `${label} failed.`));
       return null;
     }
   }
 
-  async function depositETH() {
+  async function addBalanceToContract() {
     try {
       const value = getAmount('depositAmount');
-      const tx = await runTransaction('Deposit', () => contract.deposit({ value }));
+      await validateWalletAmount(value);
+
+      const tx = await runTransaction(
+        'Add balance',
+        () => contract.deposit({ value })
+      );
+
       if (!tx) return;
+
       $('depositAmount').value = '';
       closeModal('depositModal');
     } catch (error) {
-      status(`❌ ${friendlyError(error, 'Deposit failed')}`);
+      status(friendlyError(error, 'Add balance failed.'));
     }
   }
 
@@ -338,11 +409,12 @@
     try {
       const value = getAmount('withdrawAmount');
       const tx = await runTransaction('Withdrawal', () => contract.withdraw(value));
+
       if (!tx) return;
       $('withdrawAmount').value = '';
       closeModal('withdrawModal');
     } catch (error) {
-      status(`❌ ${friendlyError(error, 'Withdrawal failed')}`);
+      status(friendlyError(error, 'Withdrawal failed.'));
     }
   }
 
@@ -356,23 +428,27 @@
       }
 
       const value = getAmount('sendAmount');
-      const tx = await runTransaction('Transfer', () => contract.transferFunds(receiver, value));
+      const tx = await runTransaction(
+        'Transfer',
+        () => contract.transferFunds(receiver, value)
+      );
 
       if (!tx) return;
       $('sendAddress').value = '';
       $('sendAmount').value = '';
       closeModal('sendModal');
     } catch (error) {
-      status(`❌ ${friendlyError(error, 'Transfer failed')}`);
+      status(friendlyError(error, 'Transfer failed.'));
     }
   }
 
   async function checkTrustedContact() {
-    if (!contract) return status('⚠️ Connect wallet first');
+    if (!contract) return status('Connect wallet first.');
 
     const address = els.contactAddress.value.trim();
     if (!ethers.isAddress(address)) {
-      return setText(els.contactStatus, 'Enter a valid Ethereum address.');
+      setText(els.contactStatus, 'Enter a valid Ethereum address.');
+      return;
     }
 
     try {
@@ -381,16 +457,16 @@
         els.contactStatus,
         trusted ? `${shortAddress(address)} is trusted.` : `${shortAddress(address)} is not trusted.`
       );
-    } catch (error) {
-      setText(els.contactStatus, friendlyError(error, 'Could not check contact.'));
+    } catch {
+      setText(els.contactStatus, 'Could not check the trusted contact.');
     }
   }
 
   async function addTrustedContact() {
-    if (!contract) return status('⚠️ Connect wallet first');
+    if (!contract) return status('Connect wallet first.');
 
     const address = els.contactAddress.value.trim();
-    if (!ethers.isAddress(address)) return status('❌ Invalid contact address');
+    if (!ethers.isAddress(address)) return status('Invalid contact address.');
 
     const tx = await runTransaction(
       'Add trusted contact',
@@ -401,10 +477,10 @@
   }
 
   async function removeTrustedContact() {
-    if (!contract) return status('⚠️ Connect wallet first');
+    if (!contract) return status('Connect wallet first.');
 
     const address = els.contactAddress.value.trim();
-    if (!ethers.isAddress(address)) return status('❌ Invalid contact address');
+    if (!ethers.isAddress(address)) return status('Invalid contact address.');
 
     const tx = await runTransaction(
       'Remove trusted contact',
@@ -415,7 +491,7 @@
   }
 
   async function setFrozenState(freeze) {
-    if (!contract) return status('⚠️ Connect wallet first');
+    if (!contract) return status('Connect wallet first.');
 
     await runTransaction(
       freeze ? 'Freeze wallet' : 'Unfreeze wallet',
@@ -426,20 +502,24 @@
   function friendlyError(error, fallback) {
     if (!error) return fallback;
     if (error.code === 4001 || error.code === 'ACTION_REJECTED') return 'Transaction rejected in MetaMask.';
-    if (error.reason) return error.reason;
-    if (error.shortMessage) return error.shortMessage;
-    if (error.message && /insufficient funds/i.test(error.message)) {
-      return 'Insufficient ETH for the transaction and gas.';
-    }
+    if (error.code === 'INSUFFICIENT_FUNDS') return 'Insufficient ETH for the transaction and gas.';
+    if (error.shortMessage && /insufficient funds/i.test(error.shortMessage)) return 'Insufficient ETH for the transaction and gas.';
+    if (error.reason && typeof error.reason === 'string') return error.reason;
     return fallback;
   }
 
   function openModal(id) {
-    $(id)?.classList.add('active');
+    const modal = $(id);
+    if (!modal) return;
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
   }
 
   function closeModal(id) {
-    $(id)?.classList.remove('active');
+    const modal = $(id);
+    if (!modal) return;
+    modal.classList.remove('active');
+    modal.setAttribute('aria-hidden', 'true');
   }
 
   function wireUI() {
@@ -447,29 +527,35 @@
     els.matrixToggle?.addEventListener('click', toggleMatrixMode);
 
     $('sendBtn')?.addEventListener('click', () => (
-      userAddress ? openModal('sendModal') : status('⚠️ Connect wallet first')
+      userAddress ? openModal('sendModal') : status('Connect wallet first.')
     ));
 
     $('receiveBtn')?.addEventListener('click', () => (
-      userAddress ? openModal('receiveModal') : status('⚠️ Connect wallet first')
+      userAddress ? openModal('receiveModal') : status('Connect wallet first.')
     ));
 
-    $('depositBtn')?.addEventListener('click', () => (
-      userAddress ? openModal('depositModal') : status('⚠️ Connect wallet first')
-    ));
+    $('depositBtn')?.addEventListener('click', async () => {
+      if (!userAddress) return status('Connect wallet first.');
+      await loadBalances();
+      openModal('depositModal');
+    });
 
     $('withdrawBtn')?.addEventListener('click', () => (
-      userAddress ? openModal('withdrawModal') : status('⚠️ Connect wallet first')
+      userAddress ? openModal('withdrawModal') : status('Connect wallet first.')
     ));
 
     $('confirmSend')?.addEventListener('click', sendETH);
-    $('confirmDeposit')?.addEventListener('click', depositETH);
+    $('confirmDeposit')?.addEventListener('click', addBalanceToContract);
     $('confirmWithdraw')?.addEventListener('click', withdrawETH);
 
     $('copyAddress')?.addEventListener('click', async () => {
-      if (!userAddress) return status('⚠️ Connect wallet first');
-      await navigator.clipboard.writeText(userAddress);
-      status('📋 Address copied');
+      if (!userAddress) return status('Connect wallet first.');
+      try {
+        await navigator.clipboard.writeText(userAddress);
+        status('Wallet address copied.');
+      } catch {
+        status('Copy failed. Select and copy the address manually.');
+      }
     });
 
     [['closeSend', 'sendModal'], ['closeReceive', 'receiveModal'], ['closeDeposit', 'depositModal'], ['closeWithdraw', 'withdrawModal']]
@@ -487,7 +573,10 @@
 
     document.querySelectorAll('.modal').forEach((modal) => {
       modal.addEventListener('click', (event) => {
-        if (event.target === modal) modal.classList.remove('active');
+        if (event.target === modal) {
+          modal.classList.remove('active');
+          modal.setAttribute('aria-hidden', 'true');
+        }
       });
     });
   }
@@ -495,9 +584,14 @@
   function wireMetaMask() {
     if (!window.ethereum) return;
 
-    window.ethereum.on('accountsChanged', async (accounts) => (
-      accounts.length ? connectWallet() : resetWalletUI()
-    ));
+    window.ethereum.on('accountsChanged', (accounts) => {
+      if (accounts.length) {
+        connectWallet();
+      } else {
+        resetWalletUI();
+        status('Wallet disconnected.');
+      }
+    });
 
     window.ethereum.on('chainChanged', () => window.location.reload());
   }
@@ -509,6 +603,6 @@
 
     setText(els.healthContract, shortAddress(CONTRACT_ADDRESS));
     setText(els.healthContractTop, shortAddress(CONTRACT_ADDRESS));
-    status('Wallet not connected');
+    status('Wallet not connected.');
   });
 })();
