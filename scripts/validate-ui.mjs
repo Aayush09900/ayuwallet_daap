@@ -28,6 +28,8 @@ assert(html.includes('id="contractUserBalance"'), "user contract balance card ex
 assert(html.includes('id="contractBalance"'), "live contract TVL metric exists");
 assert(!html.includes("60.0000 ETH"), "no demo contract balance is present");
 assert(html.includes("Live Contract TVL"), "frontend uses a live contract TVL label");
+assert(html.includes('id="preset25Btn"'), "25 ETH real funding preset exists");
+assert(html.includes('id="loadHistoryBtn"'), "transaction history load control exists");
 assert(html.includes('id="matrixToggle"'), "matrix view toggle exists");
 
 assert(js.includes("provider.getBalance(userAddress)"), "wallet balance reads from connected wallet");
@@ -47,5 +49,7 @@ assert(!js.includes("console.log("), "frontend does not log customer data to con
 assert(!js.includes("console.error("), "frontend does not log transaction errors to console");
 assert(js.includes("sessionStorage.getItem"), "UI preference storage is session-only");
 assert(js.includes("contract.deposit({ value })"), "frontend has a real on-chain add-balance flow");
+assert(js.includes("ethers.parseEther('25')"), "25 ETH target is calculated from real on-chain TVL");
+assert(js.includes("loadHistoryChunk"), "transaction history uses paginated blockchain event loading");
 
 console.log("All Ayu Wallet UI validation checks passed.");
