@@ -26,3 +26,6 @@ body:not(.matrix-mode) .matrix-grid{opacity:.035}
 @keyframes matrixScan{from{transform:translateY(-10%)}to{transform:translateY(10%)}}
 @media(max-width:1000px){.portfolio-grid{grid-template-columns:repeat(2,1fr)}.balance-grid{grid-template-columns:1fr}}
 @media(max-width:800px){.nav-actions{gap:7px}.matrix-toggle{display:none}.portfolio-grid{grid-template-columns:1fr}}
+
+.demo-metric{background:linear-gradient(135deg,rgba(34,197,94,.10),rgba(6,182,212,.05));border-color:rgba(34,197,94,.2)}
+.demo-metric h2{color:#86efac;text-shadow:0 0 20px rgba(34,197,94,.16)}
