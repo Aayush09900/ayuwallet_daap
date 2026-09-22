@@ -66,3 +66,6 @@ body:not(.matrix-mode) .matrix-grid{opacity:.035}
 .status-toolbar .status-message{margin:0}
 .ghost-btn:disabled,.action-card:disabled,.connect-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
 @media(max-width:700px){.status-toolbar{align-items:stretch}.status-actions{width:100%}.status-actions .ghost-btn{flex:1}}
+
+button{cursor:pointer}
+button:disabled{cursor:not-allowed}
