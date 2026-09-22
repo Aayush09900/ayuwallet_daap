@@ -450,31 +450,6 @@
     }
 
     const [depositLogs, withdrawLogs, sentLogs, receivedLogs] = results.map((result) => result.value);
-      provider.getLogs({
-        address: CONTRACT_ADDRESS,
-        fromBlock,
-        toBlock,
-        topics: [EVENT_TOPICS.deposit, userTopic]
-      }),
-      provider.getLogs({
-        address: CONTRACT_ADDRESS,
-        fromBlock,
-        toBlock,
-        topics: [EVENT_TOPICS.withdraw, userTopic]
-      }),
-      provider.getLogs({
-        address: CONTRACT_ADDRESS,
-        fromBlock,
-        toBlock,
-        topics: [EVENT_TOPICS.transfer, userTopic]
-      }),
-      provider.getLogs({
-        address: CONTRACT_ADDRESS,
-        fromBlock,
-        toBlock,
-        topics: [EVENT_TOPICS.transfer, null, userTopic]
-      })
-    ]);
 
     const rows = [];
 
