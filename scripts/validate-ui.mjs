@@ -59,3 +59,15 @@ assert(js.includes("ethers.parseEther('25')"), "25 ETH target is calculated from
 assert(js.includes("loadHistoryChunk"), "transaction history uses paginated blockchain event loading");
 
 console.log("All Ayu Wallet UI validation checks passed.");
+
+
+assert(html.includes('id="refreshAllBtn"'), "global refresh button exists");
+assert(html.includes('id="systemCheckBtn"'), "system diagnostic button exists");
+assert(html.includes('id="viewContractBtn"'), "view contract button exists");
+assert(js.includes("runSystemCheck"), "system diagnostic logic exists");
+assert(js.includes("provider.getLogs"), "history uses direct log queries");
+assert(js.includes("MAX_HISTORY_CHUNKS_PER_CLICK"), "older history has bounded pagination");
+assert(js.includes("contract.owner()"), "owner check exists for privileged controls");
+assert(js.includes("validateContractAccountAmount"), "withdraw/send balance checks exist");
+assert(js.includes("window.open"), "view contract action opens explorer");
+assert(css.includes(".status-toolbar"), "diagnostic toolbar styling exists");
