@@ -44,3 +44,11 @@ body:not(.matrix-mode) .matrix-grid{opacity:.035}
 .activity-meta a:hover{text-decoration:underline}
 .activity-amount{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap}
 @media(max-width:800px){.privacy-grid{grid-template-columns:1fr}.activity-row{align-items:flex-start;flex-direction:column;gap:8px}}
+
+.section-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.amount-input-row{display:flex;gap:8px;align-items:stretch;margin-bottom:0}
+.amount-input-row input{flex:1;margin-bottom:0!important;min-width:0}
+.amount-preset{white-space:nowrap}
+.activity-section .section-header{gap:12px}
+.activity-row{border-radius:10px;padding:14px 8px}
+.activity-row:hover{background:rgba(139,92,246,.04)}
