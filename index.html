@@ -53,7 +53,13 @@
     </article>
   </section>
 
-  <div id="statusMessage" class="status-message" role="status" aria-live="polite">Wallet not connected</div>
+  <div class="status-toolbar">
+    <div id="statusMessage" class="status-message" role="status" aria-live="polite">Wallet not connected</div>
+    <div class="status-actions">
+      <button id="refreshAllBtn" class="ghost-btn" type="button">Refresh All</button>
+      <button id="systemCheckBtn" class="ghost-btn" type="button">Run System Check</button>
+    </div>
+  </div>
 
   <section class="actions" aria-label="Wallet actions">
     <button class="action-card" id="sendBtn"><span class="action-icon">↑</span><span>Send</span></button>
@@ -115,7 +121,7 @@
   </section>
 
   <section class="activity-section">
-    <div class="section-header"><h2>Trusted Contacts</h2><button id="refreshContactBtn">Check</button></div>
+    <div class="section-header"><h2>Trusted Contacts</h2><button id="refreshContactBtn">Check Address</button></div>
     <div class="contact-row">
       <input id="contactAddress" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x...">
       <button id="addContactBtn" class="primary-btn compact-btn">Add</button>
