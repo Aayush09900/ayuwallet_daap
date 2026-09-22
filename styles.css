@@ -52,3 +52,11 @@ body:not(.matrix-mode) .matrix-grid{opacity:.035}
 .activity-section .section-header{gap:12px}
 .activity-row{border-radius:10px;padding:14px 8px}
 .activity-row:hover{background:rgba(139,92,246,.04)}
+
+.contract-submetrics{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.contract-submetrics>div{padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(5,8,20,.28)}
+.contract-submetrics span{display:block;color:var(--text-secondary);font-size:10px;text-transform:uppercase;letter-spacing:.7px;margin-bottom:4px}
+.contract-submetrics strong{display:block;color:#fff;font-size:13px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.history-summary{margin:-6px 0 14px;color:#7f88a7;font-size:11px}
+.section-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+@media(max-width:800px){.contract-submetrics{grid-template-columns:1fr}}
