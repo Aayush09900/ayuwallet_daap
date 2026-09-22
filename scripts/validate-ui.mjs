@@ -37,7 +37,7 @@ assert(html.includes('id="matrixToggle"'), "matrix view toggle exists");
 assert(js.includes("provider.getBalance(userAddress)"), "wallet balance reads from connected wallet");
 assert(js.includes("contract.balances(userAddress)"), "contract account balance reads from contract");
 assert(js.includes("contract.getContractBalance()"), "live contract balance reads from chain");
-assert(js.includes("contract.filters.Deposit()"), "history uses unparameterized deposit event filters");
+assert(js.includes("EVENT_TOPICS.deposit"), "history uses explicit deposit event topic");
 assert(js.includes("historyNextToBlock"), "history supports older block ranges");
 assert(js.includes("setText(els.walletBalance"), "wallet balance renders into wallet card");
 assert(js.includes("setText(els.contractUserBalance"), "contract account balance renders into contract card");
