@@ -14,8 +14,10 @@
   let historyRows = [];
   let historyLoading = false;
   let isContractOwner = false;
-  const HISTORY_CHUNK = 2000;
-  const MAX_HISTORY_CHUNKS_PER_CLICK = 5;
+  // Keep RPC log queries small enough for browser wallets/public Sepolia RPCs.
+  // Older history is paginated deliberately so one click never blocks the UI.
+  const HISTORY_CHUNK = 500;
+  const MAX_HISTORY_CHUNKS_PER_CLICK = 3;
   const EVENT_TOPICS = {
     deposit: ethers.id('Deposit(address,uint256)'),
     withdraw: ethers.id('Withdraw(address,uint256)'),
@@ -237,12 +239,19 @@
 
   async function refreshDashboard() {
     if (!contract || !userAddress) return;
-    await Promise.all([
+
+    // A history RPC failure must never make balances/health look broken.
+    const results = await Promise.allSettled([
       loadBalances(),
       loadStatistics(),
       loadHealth(),
       loadHistoryChunk(true)
     ]);
+
+    const historyResult = results[3];
+    if (historyResult?.status === 'rejected') {
+      setText(els.historySummary, 'History could not be loaded. Use Load Older or try Refresh again.');
+    }
   }
 
   async function refreshAll() {
@@ -407,7 +416,40 @@
   async function queryUserHistory(fromBlock, toBlock) {
     const userTopic = ethers.zeroPadValue(userAddress, 32);
 
-    const [depositLogs, withdrawLogs, sentLogs, receivedLogs] = await Promise.all([
+    const requests = [
+      provider.getLogs({
+        address: CONTRACT_ADDRESS,
+        fromBlock,
+        toBlock,
+        topics: [EVENT_TOPICS.deposit, userTopic]
+      }),
+      provider.getLogs({
+        address: CONTRACT_ADDRESS,
+        fromBlock,
+        toBlock,
+        topics: [EVENT_TOPICS.withdraw, userTopic]
+      }),
+      provider.getLogs({
+        address: CONTRACT_ADDRESS,
+        fromBlock,
+        toBlock,
+        topics: [EVENT_TOPICS.transfer, userTopic]
+      }),
+      provider.getLogs({
+        address: CONTRACT_ADDRESS,
+        fromBlock,
+        toBlock,
+        topics: [EVENT_TOPICS.transfer, null, userTopic]
+      })
+    ];
+
+    const results = await Promise.allSettled(requests);
+    const failed = results.find((result) => result.status === 'rejected');
+    if (failed) {
+      throw new Error('Sepolia RPC could not query this history range. Try again or use Load Older.');
+    }
+
+    const [depositLogs, withdrawLogs, sentLogs, receivedLogs] = results.map((result) => result.value);
       provider.getLogs({
         address: CONTRACT_ADDRESS,
         fromBlock,
@@ -486,9 +528,14 @@
   }
 
   async function loadHistoryChunk(reset = false) {
-    if (!provider || !contract || !userAddress || historyLoading) return;
+    if (!provider || !contract || !userAddress) {
+      status('Connect MetaMask to load transaction history.');
+      return;
+    }
+    if (historyLoading) return;
 
     historyLoading = true;
+    status(reset ? 'Refreshing transaction history...' : 'Loading older transaction history...');
     if (els.loadHistoryBtn) els.loadHistoryBtn.disabled = true;
 
     try {
@@ -533,10 +580,14 @@
       }
     } catch (error) {
       if (els.historySummary) {
-        els.historySummary.textContent = 'History provider query failed. Run System Check or Refresh All and try again.';
+        els.historySummary.textContent = 'History query failed. Check Sepolia connection and try again.';
       }
-      if (els.loadHistoryBtn) els.loadHistoryBtn.disabled = false;
-      throw error;
+      status(friendlyError(error, 'Transaction history could not be loaded.'));
+      if (els.loadHistoryBtn) {
+        els.loadHistoryBtn.disabled = false;
+        els.loadHistoryBtn.textContent = 'Load Older';
+      }
+      return;
     } finally {
       historyLoading = false;
       if (els.loadHistoryBtn && historyNextToBlock >= 0) {
@@ -580,8 +631,15 @@
       const tx = await action();
       status(`${label} pending: ${shortHash(tx.hash)}`);
       await tx.wait();
+      status(`${label} confirmed. Updating wallet data...`);
+      try {
+        await refreshDashboard();
+      } catch (refreshError) {
+        // The transaction is already confirmed; a follow-up read failure must not
+        // incorrectly report the confirmed transaction as failed.
+        console.warn('Post-transaction refresh failed:', refreshError);
+      }
       status(`${label} confirmed.`);
-      await refreshDashboard();
       return tx;
     } catch (error) {
       status(friendlyError(error, `${label} failed.`));
@@ -786,25 +844,46 @@
       });
 
     $('viewAllBtn')?.addEventListener('click', async () => {
-      if (!(await ensureWalletConnected({ request: true }))) return;
-      await loadHistoryChunk(true);
+      try {
+        if (!(await ensureWalletConnected({ request: true }))) return;
+        await loadHistoryChunk(true);
+      } catch (error) {
+        status(friendlyError(error, 'Could not refresh transaction history.'));
+      }
     });
     $('loadHistoryBtn')?.addEventListener('click', async () => {
-      if (!(await ensureWalletConnected({ request: true }))) return;
-      await loadHistoryChunk(false);
+      try {
+        if (!(await ensureWalletConnected({ request: true }))) return;
+        await loadHistoryChunk(false);
+      } catch (error) {
+        status(friendlyError(error, 'Could not load older transaction history.'));
+      }
     });
     $('refreshHealthBtn')?.addEventListener('click', async () => {
-      if (!(await ensureWalletConnected({ request: true }))) return;
-      await loadHealth();
-      status('Contract health refreshed.');
+      try {
+        if (!(await ensureWalletConnected({ request: true }))) return;
+        status('Refreshing contract health...');
+        await loadHealth();
+        status('Contract health refreshed.');
+      } catch (error) {
+        status(friendlyError(error, 'Contract health refresh failed.'));
+      }
     });
     els.refreshAllBtn?.addEventListener('click', async () => {
-      if (!(await ensureWalletConnected({ request: true }))) return;
-      await refreshAll();
+      try {
+        if (!(await ensureWalletConnected({ request: true }))) return;
+        await refreshAll();
+      } catch (error) {
+        status(friendlyError(error, 'Refresh All failed.'));
+      }
     });
     els.systemCheckBtn?.addEventListener('click', async () => {
-      if (!(await ensureWalletConnected({ request: true }))) return;
-      await runSystemCheck();
+      try {
+        if (!(await ensureWalletConnected({ request: true }))) return;
+        await runSystemCheck();
+      } catch (error) {
+        status(friendlyError(error, 'System check failed.'));
+      }
     });
     $('refreshContactBtn')?.addEventListener('click', async () => {
       if (!(await ensureWalletConnected({ request: true }))) return;
