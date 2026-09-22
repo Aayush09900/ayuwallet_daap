@@ -40,12 +40,16 @@
 
     <article class="balance-card contract-user-card">
       <div>
-        <p class="small-label">AYU CONTRACT ACCOUNT</p>
-        <h1><span id="contractUserBalance">0.0000</span> <span class="currency">ETH</span></h1>
-        <p class="metric-note balance-explainer">Your individual balance recorded inside the Ayu Wallet contract. Use Add Balance to move ETH from your wallet into this contract account.</p>
+        <p class="small-label">AYU CONTRACT BALANCE</p>
+        <h1><span id="contractBalanceTop">0.0000</span> <span class="currency">ETH</span></h1>
+        <p class="metric-note balance-explainer">Live ETH held by the deployed Ayu Wallet contract on Sepolia. This is the contract balance, not your MetaMask wallet balance.</p>
+        <div class="contract-submetrics">
+          <div><span>Your contract account</span><strong id="contractUserBalance">0.0000 ETH</strong></div>
+          <div><span>Target</span><strong>25.0000 ETH</strong></div>
+        </div>
         <p class="wallet-address">Contract: <span id="healthContractTop">0x10bb...c2be</span></p>
       </div>
-      <div class="balance-badge contract-badge">CONTRACT</div>
+      <div class="balance-badge contract-badge">LIVE ON-CHAIN</div>
     </article>
   </section>
 
@@ -92,7 +96,8 @@
   </section>
 
   <section class="activity-section">
-    <div class="section-header"><h2>Transaction History</h2><div class="section-actions"><button id="viewAllBtn">Refresh</button><button id="loadHistoryBtn" class="ghost-btn">Load Older</button></div></div>
+    <div class="section-header"><h2>Transaction History</h2><div class="section-actions"><button id="viewAllBtn">Refresh</button><button id="loadHistoryBtn" class="ghost-btn">Load Older</button><button id="viewContractBtn" class="ghost-btn">View Contract</button></div></div>
+    <div id="historySummary" class="history-summary">Connect your wallet to view transaction history.</div>
     <div id="activityList" class="activity-list" aria-live="polite">
       <div class="empty-state"><div class="empty-icon">◇</div><p>No transactions yet</p><span>Your confirmed contract activity will appear here.</span></div>
     </div>
