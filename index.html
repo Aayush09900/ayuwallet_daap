@@ -92,8 +92,8 @@
   </section>
 
   <section class="activity-section">
-    <div class="section-header"><h2>Recent Activity</h2><button id="viewAllBtn">Refresh</button></div>
-    <div id="activityList" class="activity-list">
+    <div class="section-header"><h2>Transaction History</h2><div class="section-actions"><button id="viewAllBtn">Refresh</button><button id="loadHistoryBtn" class="ghost-btn">Load Older</button></div></div>
+    <div id="activityList" class="activity-list" aria-live="polite">
       <div class="empty-state"><div class="empty-icon">◇</div><p>No transactions yet</p><span>Your confirmed contract activity will appear here.</span></div>
     </div>
   </section>
@@ -145,8 +145,12 @@
     <div class="modal-header"><h2>Add Balance to Contract</h2><button class="close-btn" id="closeDeposit">×</button></div>
     <p class="modal-description">This sends ETH from your connected MetaMask wallet into your Ayu Wallet contract account. The contract balance and your individual contract balance update only after the transaction is confirmed on-chain.</p>
     <label for="depositAmount">Amount to Add (ETH)</label>
-    <input id="depositAmount" type="number" min="0" step="0.0001" inputmode="decimal" autocomplete="off" placeholder="0.01">
+    <div class="amount-input-row">
+      <input id="depositAmount" type="number" min="0" step="0.0001" inputmode="decimal" autocomplete="off" placeholder="0.01">
+      <button id="preset25Btn" type="button" class="ghost-btn amount-preset">25 ETH</button>
+    </div>
     <p id="depositAvailability" class="metric-note modal-note">Available wallet balance: —</p>
+    <p id="target25Status" class="metric-note modal-note">25 ETH is a real funding target. The transaction can only use ETH actually available in your connected wallet.</p>
     <button id="confirmDeposit" class="primary-btn">Add Balance</button>
   </div>
 </div>
