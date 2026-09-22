@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Ayu Wallet — non-custodial Ethereum wallet DApp on Sepolia.">
 <meta name="theme-color" content="#070812">
+<meta http-equiv="Referrer-Policy" content="no-referrer">
+<meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=()">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self'; img-src 'self' data:; connect-src 'self' https://sepolia.etherscan.io; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; upgrade-insecure-requests">
 <title>Ayu Wallet · Web3 Matrix UI</title>
 <link rel="stylesheet" href="styles.css">
 </head>
@@ -14,19 +17,22 @@
 <nav class="navbar">
   <div class="logo"><span class="logo-icon">◆</span><span>Ayu Wallet</span></div>
   <div class="nav-actions">
-    <div class="network"><span id="networkDot" class="network-dot"></span><span id="networkLabel">Sepolia Testnet</span></div>
+    <div class="network" aria-label="Connected blockchain network">
+      <span id="networkDot" class="network-dot"></span>
+      <span id="networkLabel">Sepolia Testnet</span>
+    </div>
     <button id="matrixToggle" class="matrix-toggle" type="button" aria-pressed="true">Matrix View: ON</button>
     <button id="connectWalletBtn" class="connect-btn">Connect Wallet</button>
   </div>
 </nav>
 
 <main class="container">
-  <section class="balance-grid" aria-label="Separated wallet balances">
+  <section class="balance-grid" aria-label="Separated wallet and contract balances">
     <article class="balance-card wallet-card">
       <div>
         <p class="small-label">METAMASK WALLET</p>
         <h1><span id="walletBalance">0.0000</span> <span class="currency">ETH</span></h1>
-        <p class="metric-note balance-explainer">Native Sepolia ETH currently held by the connected wallet.</p>
+        <p class="metric-note balance-explainer">Native Sepolia ETH in the connected wallet. This is separate from the amount recorded by the Ayu Wallet contract.</p>
         <p id="walletAddress" class="wallet-address">Not connected</p>
       </div>
       <div class="balance-badge">WALLET</div>
@@ -36,19 +42,19 @@
       <div>
         <p class="small-label">AYU CONTRACT ACCOUNT</p>
         <h1><span id="contractUserBalance">0.0000</span> <span class="currency">ETH</span></h1>
-        <p class="metric-note balance-explainer">Your separate on-chain balance recorded inside the Ayu Wallet contract.</p>
+        <p class="metric-note balance-explainer">Your individual balance recorded inside the Ayu Wallet contract. Use Add Balance to move ETH from your wallet into this contract account.</p>
         <p class="wallet-address">Contract: <span id="healthContractTop">0x10bb...c2be</span></p>
       </div>
       <div class="balance-badge contract-badge">CONTRACT</div>
     </article>
   </section>
 
-  <div id="statusMessage" class="status-message">Wallet not connected</div>
+  <div id="statusMessage" class="status-message" role="status" aria-live="polite">Wallet not connected</div>
 
-  <section class="actions">
+  <section class="actions" aria-label="Wallet actions">
     <button class="action-card" id="sendBtn"><span class="action-icon">↑</span><span>Send</span></button>
     <button class="action-card" id="receiveBtn"><span class="action-icon">↓</span><span>Receive</span></button>
-    <button class="action-card" id="depositBtn"><span class="action-icon">+</span><span>Deposit</span></button>
+    <button class="action-card" id="depositBtn"><span class="action-icon">+</span><span>Add Balance</span></button>
     <button class="action-card" id="withdrawBtn"><span class="action-icon">−</span><span>Withdraw</span></button>
   </section>
 
@@ -56,27 +62,32 @@
     <div class="analytics-card featured-metric">
       <p>Live Contract TVL</p>
       <h2 id="contractBalance">0.0000 ETH</h2>
-      <span class="metric-note">Read directly from the Sepolia contract.</span>
-    </div>
-    <div class="analytics-card demo-metric">
-      <p>Demo Contract Balance</p>
-      <h2>60.0000 ETH</h2>
-      <span class="metric-note">Presentation target only — not an on-chain balance.</span>
+      <span class="metric-note">Read directly from the deployed Sepolia contract. Never replaced with demo data.</span>
     </div>
     <div class="analytics-card">
       <p>Total Deposited</p>
       <h2 id="depositCount">0.0000 ETH</h2>
-      <span class="metric-note">Cumulative contract deposits.</span>
+      <span class="metric-note">Cumulative on-chain deposits recorded by the contract.</span>
     </div>
     <div class="analytics-card">
       <p>Total Withdrawn</p>
       <h2 id="withdrawCount">0.0000 ETH</h2>
-      <span class="metric-note">Cumulative contract withdrawals.</span>
+      <span class="metric-note">Cumulative on-chain withdrawals recorded by the contract.</span>
     </div>
     <div class="analytics-card">
       <p>Transfers</p>
       <h2 id="transferCount">0</h2>
       <span class="metric-note">Recorded transfer operations.</span>
+    </div>
+  </section>
+
+  <section class="activity-section privacy-panel">
+    <div class="section-header"><h2>Privacy & Security</h2><span class="security-chip">NO PII STORAGE</span></div>
+    <div class="privacy-grid">
+      <div><strong>Session-only wallet state</strong><span>Your wallet address is kept in browser memory for the active session; the app does not send it to an application database.</span></div>
+      <div><strong>No seed phrase or private key</strong><span>Ayu Wallet never asks for or stores a seed phrase, private key, or signing secret.</span></div>
+      <div><strong>No analytics or customer profiling</strong><span>No tracking pixels, advertising IDs, customer profiles, or third-party analytics are used by the app.</span></div>
+      <div><strong>Public blockchain disclosure</strong><span>Sepolia addresses, balances, and transactions are public blockchain data. The UI does not claim that on-chain activity is private.</span></div>
     </div>
   </section>
 
@@ -89,28 +100,67 @@
 
   <section class="activity-section">
     <div class="section-header"><h2>Contract Health</h2><button id="refreshHealthBtn">Refresh</button></div>
-    <div class="analytics">
+    <div class="analytics health-grid">
       <div class="analytics-card"><p>Network</p><h2 id="healthNetwork">Sepolia</h2></div>
-      <div class="analytics-card"><p>Frozen</p><h2 id="healthFrozen">—</h2></div>
-      <div class="analytics-card"><p>Contract</p><h2 id="healthContract" style="font-size:14px">0x10bb...c2be</h2></div>
+      <div class="analytics-card"><p>Wallet Frozen</p><h2 id="healthFrozen">—</h2></div>
+      <div class="analytics-card"><p>Contract</p><h2 id="healthContract">0x10bb...c2be</h2></div>
     </div>
-    <p id="healthOwner" class="wallet-address" style="margin-top:12px">Connect wallet to inspect contract health.</p>
+    <p id="healthOwner" class="wallet-address health-note">Contract status will appear after connection.</p>
     <div class="security-actions"><button id="freezeBtn" class="ghost-btn">Freeze Wallet</button><button id="unfreezeBtn" class="ghost-btn">Unfreeze Wallet</button></div>
   </section>
 
   <section class="activity-section">
     <div class="section-header"><h2>Trusted Contacts</h2><button id="refreshContactBtn">Check</button></div>
-    <div class="contact-row"><input id="contactAddress" type="text" placeholder="0x..."><button id="addContactBtn" class="primary-btn compact-btn">Add</button><button id="removeContactBtn" class="ghost-btn">Remove</button></div>
-    <p id="contactStatus" class="wallet-address" style="margin-top:12px">No contact checked.</p>
+    <div class="contact-row">
+      <input id="contactAddress" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x...">
+      <button id="addContactBtn" class="primary-btn compact-btn">Add</button>
+      <button id="removeContactBtn" class="ghost-btn">Remove</button>
+    </div>
+    <p id="contactStatus" class="wallet-address health-note">No contact checked. Trusted contacts are on-chain and publicly observable.</p>
   </section>
 </main>
 
-<div id="sendModal" class="modal"><div class="modal-content"><div class="modal-header"><h2>Send ETH</h2><button class="close-btn" id="closeSend">×</button></div><label>Recipient Address</label><input id="sendAddress" placeholder="0x..."><label>Amount (ETH)</label><input id="sendAmount" type="number" min="0" step="0.0001" placeholder="0.01"><button id="confirmSend" class="primary-btn">Send ETH</button></div></div>
-<div id="receiveModal" class="modal"><div class="modal-content"><div class="modal-header"><h2>Receive ETH</h2><button class="close-btn" id="closeReceive">×</button></div><p class="modal-description">Send ETH to this wallet address.</p><div class="address-box" id="receiveAddress">Not connected</div><button id="copyAddress" class="primary-btn">Copy Address</button></div></div>
-<div id="depositModal" class="modal"><div class="modal-content"><div class="modal-header"><h2>Deposit ETH</h2><button class="close-btn" id="closeDeposit">×</button></div><label>Amount (ETH)</label><input id="depositAmount" type="number" min="0" step="0.0001" placeholder="0.01"><button id="confirmDeposit" class="primary-btn">Deposit ETH</button></div></div>
-<div id="withdrawModal" class="modal"><div class="modal-content"><div class="modal-header"><h2>Withdraw ETH</h2><button class="close-btn" id="closeWithdraw">×</button></div><label>Amount (ETH)</label><input id="withdrawAmount" type="number" min="0" step="0.0001" placeholder="0.01"><button id="confirmWithdraw" class="primary-btn">Withdraw ETH</button></div></div>
+<div id="sendModal" class="modal" aria-hidden="true">
+  <div class="modal-content">
+    <div class="modal-header"><h2>Send ETH</h2><button class="close-btn" id="closeSend">×</button></div>
+    <label for="sendAddress">Recipient Address</label>
+    <input id="sendAddress" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x...">
+    <label for="sendAmount">Amount (ETH)</label>
+    <input id="sendAmount" type="number" min="0" step="0.0001" inputmode="decimal" autocomplete="off" placeholder="0.01">
+    <button id="confirmSend" class="primary-btn">Send ETH</button>
+  </div>
+</div>
 
-<footer class="site-footer"><span>Ayu Wallet · Sepolia · Non-custodial</span><span>Matrix UI · Testnet build · Verify contracts before mainnet use</span></footer>
+<div id="receiveModal" class="modal" aria-hidden="true">
+  <div class="modal-content">
+    <div class="modal-header"><h2>Receive ETH</h2><button class="close-btn" id="closeReceive">×</button></div>
+    <p class="modal-description">Your wallet address is shown only after connection. Share it only with the sender you trust.</p>
+    <div class="address-box" id="receiveAddress">Not connected</div>
+    <button id="copyAddress" class="primary-btn">Copy Address</button>
+  </div>
+</div>
+
+<div id="depositModal" class="modal" aria-hidden="true">
+  <div class="modal-content">
+    <div class="modal-header"><h2>Add Balance to Contract</h2><button class="close-btn" id="closeDeposit">×</button></div>
+    <p class="modal-description">This sends ETH from your connected MetaMask wallet into your Ayu Wallet contract account. The contract balance and your individual contract balance update only after the transaction is confirmed on-chain.</p>
+    <label for="depositAmount">Amount to Add (ETH)</label>
+    <input id="depositAmount" type="number" min="0" step="0.0001" inputmode="decimal" autocomplete="off" placeholder="0.01">
+    <p id="depositAvailability" class="metric-note modal-note">Available wallet balance: —</p>
+    <button id="confirmDeposit" class="primary-btn">Add Balance</button>
+  </div>
+</div>
+
+<div id="withdrawModal" class="modal" aria-hidden="true">
+  <div class="modal-content">
+    <div class="modal-header"><h2>Withdraw ETH</h2><button class="close-btn" id="closeWithdraw">×</button></div>
+    <label for="withdrawAmount">Amount (ETH)</label>
+    <input id="withdrawAmount" type="number" min="0" step="0.0001" inputmode="decimal" autocomplete="off" placeholder="0.01">
+    <button id="confirmWithdraw" class="primary-btn">Withdraw ETH</button>
+  </div>
+</div>
+
+<footer class="site-footer"><span>Ayu Wallet · Sepolia · Non-custodial</span><span>Live on-chain data · No demo balances</span></footer>
 
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.16.0/dist/ethers.umd.min.js"></script>
