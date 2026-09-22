@@ -5,24 +5,42 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="description" content="Ayu Wallet — non-custodial Ethereum wallet DApp on Sepolia.">
 <meta name="theme-color" content="#070812">
-<title>Ayu Wallet</title>
+<title>Ayu Wallet · Web3 Matrix UI</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<div class="matrix-grid" aria-hidden="true"></div>
+
 <nav class="navbar">
   <div class="logo"><span class="logo-icon">◆</span><span>Ayu Wallet</span></div>
-  <div class="network"><span id="networkDot" class="network-dot"></span><span id="networkLabel">Sepolia Testnet</span></div>
-  <button id="connectWalletBtn" class="connect-btn">Connect Wallet</button>
+  <div class="nav-actions">
+    <div class="network"><span id="networkDot" class="network-dot"></span><span id="networkLabel">Sepolia Testnet</span></div>
+    <button id="matrixToggle" class="matrix-toggle" type="button" aria-pressed="true">Matrix View: ON</button>
+    <button id="connectWalletBtn" class="connect-btn">Connect Wallet</button>
+  </div>
 </nav>
 
 <main class="container">
-  <section class="balance-card">
-    <div>
-      <p class="small-label">AYU WALLET BALANCE</p>
-      <h1><span id="walletBalance">0.0000</span> <span class="currency">ETH</span></h1>
-      <p id="walletAddress" class="wallet-address">Not connected</p>
-    </div>
-    <div class="balance-icon">Ξ</div>
+  <section class="balance-grid" aria-label="Separated wallet balances">
+    <article class="balance-card wallet-card">
+      <div>
+        <p class="small-label">METAMASK WALLET</p>
+        <h1><span id="walletBalance">0.0000</span> <span class="currency">ETH</span></h1>
+        <p class="metric-note balance-explainer">Native Sepolia ETH currently held by the connected wallet.</p>
+        <p id="walletAddress" class="wallet-address">Not connected</p>
+      </div>
+      <div class="balance-badge">WALLET</div>
+    </article>
+
+    <article class="balance-card contract-user-card">
+      <div>
+        <p class="small-label">AYU CONTRACT ACCOUNT</p>
+        <h1><span id="contractUserBalance">0.0000</span> <span class="currency">ETH</span></h1>
+        <p class="metric-note balance-explainer">Your separate on-chain balance recorded inside the Ayu Wallet contract.</p>
+        <p class="wallet-address">Contract: <span id="healthContractTop">0x10bb...c2be</span></p>
+      </div>
+      <div class="balance-badge contract-badge">CONTRACT</div>
+    </article>
   </section>
 
   <div id="statusMessage" class="status-message">Wallet not connected</div>
@@ -34,31 +52,26 @@
     <button class="action-card" id="withdrawBtn"><span class="action-icon">−</span><span>Withdraw</span></button>
   </section>
 
-  <section class="analytics portfolio-grid">
-    <div class="analytics-card">
-      <p>MetaMask Balance</p>
-      <h2 id="nativeBalance">0.0000 ETH</h2>
-      <span class="metric-note">Your available Sepolia ETH</span>
-    </div>
+  <section class="analytics portfolio-grid" aria-label="Contract statistics">
     <div class="analytics-card featured-metric">
-      <p>Ayu Contract Balance</p>
+      <p>Contract TVL</p>
       <h2 id="contractBalance">0.0000 ETH</h2>
-      <span class="metric-note">Live on-chain TVL</span>
+      <span class="metric-note">Total ETH currently held by the contract.</span>
     </div>
     <div class="analytics-card">
       <p>Total Deposited</p>
       <h2 id="depositCount">0.0000 ETH</h2>
-      <span class="metric-note">Cumulative contract deposits</span>
+      <span class="metric-note">Cumulative contract deposits.</span>
     </div>
     <div class="analytics-card">
       <p>Total Withdrawn</p>
       <h2 id="withdrawCount">0.0000 ETH</h2>
-      <span class="metric-note">Cumulative contract withdrawals</span>
+      <span class="metric-note">Cumulative contract withdrawals.</span>
     </div>
     <div class="analytics-card">
       <p>Transfers</p>
       <h2 id="transferCount">0</h2>
-      <span class="metric-note">Recorded transfer operations</span>
+      <span class="metric-note">Recorded transfer operations.</span>
     </div>
   </section>
 
@@ -92,7 +105,7 @@
 <div id="depositModal" class="modal"><div class="modal-content"><div class="modal-header"><h2>Deposit ETH</h2><button class="close-btn" id="closeDeposit">×</button></div><label>Amount (ETH)</label><input id="depositAmount" type="number" min="0" step="0.0001" placeholder="0.01"><button id="confirmDeposit" class="primary-btn">Deposit ETH</button></div></div>
 <div id="withdrawModal" class="modal"><div class="modal-content"><div class="modal-header"><h2>Withdraw ETH</h2><button class="close-btn" id="closeWithdraw">×</button></div><label>Amount (ETH)</label><input id="withdrawAmount" type="number" min="0" step="0.0001" placeholder="0.01"><button id="confirmWithdraw" class="primary-btn">Withdraw ETH</button></div></div>
 
-<footer class="site-footer"><span>Ayu Wallet · Sepolia · Non-custodial</span><span>Testnet build · Verify contracts before mainnet use</span></footer>
+<footer class="site-footer"><span>Ayu Wallet · Sepolia · Non-custodial</span><span>Matrix UI · Testnet build · Verify contracts before mainnet use</span></footer>
 
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/ethers@6.16.0/dist/ethers.umd.min.js"></script>
