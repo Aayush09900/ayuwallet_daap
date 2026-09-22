@@ -13,13 +13,22 @@
   let historyNextToBlock = null;
   let historyRows = [];
   let historyLoading = false;
-  const HISTORY_CHUNK = 5000;
+  let isContractOwner = false;
+  const HISTORY_CHUNK = 2000;
+  const MAX_HISTORY_CHUNKS_PER_CLICK = 5;
+  const EVENT_TOPICS = {
+    deposit: ethers.id('Deposit(address,uint256)'),
+    withdraw: ethers.id('Withdraw(address,uint256)'),
+    transfer: ethers.id('TransferFunds(address,address,uint256)')
+  };
 
   const $ = (id) => document.getElementById(id);
   const els = {
     connect: $('connectWalletBtn'),
     matrixToggle: $('matrixToggle'),
     status: $('statusMessage'),
+    refreshAllBtn: $('refreshAllBtn'),
+    systemCheckBtn: $('systemCheckBtn'),
     address: $('walletAddress'),
     walletBalance: $('walletBalance'),
     contractUserBalance: $('contractUserBalance'),
@@ -44,7 +53,9 @@
     healthOwner: $('healthOwner'),
     depositAvailability: $('depositAvailability'),
     contactAddress: $('contactAddress'),
-    contactStatus: $('contactStatus')
+    contactStatus: $('contactStatus'),
+    freezeBtn: $('freezeBtn'),
+    unfreezeBtn: $('unfreezeBtn')
   };
 
   function status(message) {
@@ -191,7 +202,10 @@
     setText(els.contactStatus, 'No contact checked. Trusted contacts are on-chain and publicly observable.');
     historyNextToBlock = null;
     historyRows = [];
+    isContractOwner = false;
     if (els.loadHistoryBtn) els.loadHistoryBtn.disabled = false;
+    if (els.freezeBtn) els.freezeBtn.disabled = true;
+    if (els.unfreezeBtn) els.unfreezeBtn.disabled = true;
 
     if (els.connect) els.connect.textContent = 'Connect Wallet';
     if (els.networkDot) els.networkDot.style.background = 'var(--danger)';
@@ -205,6 +219,51 @@
       loadHealth(),
       loadHistoryChunk(true)
     ]);
+  }
+
+  async function refreshAll() {
+    if (!contract || !userAddress) {
+      status('Connect wallet first.');
+      return;
+    }
+
+    try {
+      status('Refreshing wallet, contract, health, and history...');
+      await refreshDashboard();
+      status('All wallet data refreshed.');
+    } catch (error) {
+      status(friendlyError(error, 'Refresh failed.'));
+    }
+  }
+
+  async function runSystemCheck() {
+    if (!provider || !contract || !userAddress) {
+      status('Connect wallet first.');
+      return;
+    }
+
+    try {
+      status('Running system check...');
+      const [network, code, walletBalance, accountBalance, contractBalance] = await Promise.all([
+        provider.getNetwork(),
+        provider.getCode(CONTRACT_ADDRESS),
+        provider.getBalance(userAddress),
+        contract.balances(userAddress),
+        contract.getContractBalance()
+      ]);
+
+      if (network.chainId !== 11155111n) throw new Error('Wrong network. Please use Sepolia.');
+      if (code === '0x') throw new Error('Configured contract has no bytecode on Sepolia.');
+
+      await loadHealth();
+      await loadHistoryChunk(true);
+
+      status(
+        `System check passed · Wallet ${formatEth(walletBalance)} ETH · Your contract ${formatEth(accountBalance)} ETH · TVL ${formatEth(contractBalance)} ETH`
+      );
+    } catch (error) {
+      status(friendlyError(error, 'System check failed.'));
+    }
   }
 
   async function loadBalances() {
@@ -244,10 +303,15 @@
   }
 
   async function loadHealth() {
-    const [frozen, contractValue] = await Promise.all([
+    const [frozen, contractValue, owner] = await Promise.all([
       contract.frozen(),
-      contract.getContractBalance()
+      contract.getContractBalance(),
+      contract.owner()
     ]);
+
+    isContractOwner = owner.toLowerCase() === userAddress.toLowerCase();
+    if (els.freezeBtn) els.freezeBtn.disabled = !isContractOwner;
+    if (els.unfreezeBtn) els.unfreezeBtn.disabled = !isContractOwner;
 
     setText(els.healthNetwork, 'Sepolia');
     setText(els.healthFrozen, frozen ? 'YES' : 'NO');
@@ -316,6 +380,87 @@
     });
   }
 
+  async function queryUserHistory(fromBlock, toBlock) {
+    const userTopic = ethers.zeroPadValue(userAddress, 32);
+
+    const [depositLogs, withdrawLogs, sentLogs, receivedLogs] = await Promise.all([
+      provider.getLogs({
+        address: CONTRACT_ADDRESS,
+        fromBlock,
+        toBlock,
+        topics: [EVENT_TOPICS.deposit, userTopic]
+      }),
+      provider.getLogs({
+        address: CONTRACT_ADDRESS,
+        fromBlock,
+        toBlock,
+        topics: [EVENT_TOPICS.withdraw, userTopic]
+      }),
+      provider.getLogs({
+        address: CONTRACT_ADDRESS,
+        fromBlock,
+        toBlock,
+        topics: [EVENT_TOPICS.transfer, userTopic]
+      }),
+      provider.getLogs({
+        address: CONTRACT_ADDRESS,
+        fromBlock,
+        toBlock,
+        topics: [EVENT_TOPICS.transfer, null, userTopic]
+      })
+    ]);
+
+    const rows = [];
+
+    function parse(log, fallbackType) {
+      const parsed = contract.interface.parseLog({ topics: log.topics, data: log.data });
+      if (!parsed) return null;
+      return { parsed, hash: log.transactionHash, block: log.blockNumber };
+    }
+
+    for (const log of depositLogs) {
+      const item = parse(log, 'Deposit');
+      if (item) rows.push({
+        type: 'Deposit',
+        amount: item.parsed.args.amount,
+        hash: item.hash,
+        block: item.block
+      });
+    }
+
+    for (const log of withdrawLogs) {
+      const item = parse(log, 'Withdraw');
+      if (item) rows.push({
+        type: 'Withdraw',
+        amount: item.parsed.args.amount,
+        hash: item.hash,
+        block: item.block
+      });
+    }
+
+    for (const log of sentLogs) {
+      const item = parse(log, 'Sent');
+      if (item) rows.push({
+        type: 'Sent',
+        amount: item.parsed.args.amount,
+        hash: item.hash,
+        block: item.block
+      });
+    }
+
+    for (const log of receivedLogs) {
+      const item = parse(log, 'Received');
+      if (item) rows.push({
+        type: 'Received',
+        amount: item.parsed.args.amount,
+        hash: item.hash,
+        block: item.block
+      });
+    }
+
+    return rows;
+  }
+
   async function loadHistoryChunk(reset = false) {
     if (!provider || !contract || !userAddress || historyLoading) return;
 
@@ -328,60 +473,34 @@
         historyRows = [];
       }
 
-      const toBlock = historyNextToBlock;
-      const fromBlock = Math.max(0, toBlock - HISTORY_CHUNK + 1);
-      const me = userAddress.toLowerCase();
+      let chunksScanned = 0;
+      let added = 0;
 
-      // Query unparameterized event filters and filter client-side.
-      // This is more reliable across providers than relying on indexed filter encoding.
-      const [deposits, withdrawals, transfers] = await Promise.all([
-        contract.queryFilter(contract.filters.Deposit(), fromBlock, toBlock),
-        contract.queryFilter(contract.filters.Withdraw(), fromBlock, toBlock),
-        contract.queryFilter(contract.filters.TransferFunds(), fromBlock, toBlock)
-      ]);
+      while (historyNextToBlock >= 0 && chunksScanned < MAX_HISTORY_CHUNKS_PER_CLICK) {
+        const toBlock = historyNextToBlock;
+        const fromBlock = Math.max(0, toBlock - HISTORY_CHUNK + 1);
+        const chunk = await queryUserHistory(fromBlock, toBlock);
 
-      const chunk = [];
-      deposits.forEach((event) => {
-        if (event.args.user.toLowerCase() === me) {
-          chunk.push({ type: 'Deposit', amount: event.args.amount, hash: event.transactionHash, block: event.blockNumber });
-        }
-      });
+        const before = historyRows.length;
+        historyRows = historyRows.concat(chunk);
+        historyRows.sort((a, b) => b.block - a.block);
+        historyRows = historyRows.filter((row, index, all) =>
+          index === all.findIndex((other) => other.hash === row.hash && other.type === row.type)
+        );
 
-      withdrawals.forEach((event) => {
-        if (event.args.user.toLowerCase() === me) {
-          chunk.push({ type: 'Withdraw', amount: event.args.amount, hash: event.transactionHash, block: event.blockNumber });
-        }
-      });
+        added += historyRows.length - before;
+        historyNextToBlock = fromBlock - 1;
+        chunksScanned += 1;
 
-      transfers.forEach((event) => {
-        const from = event.args.from.toLowerCase();
-        const to = event.args.to.toLowerCase();
-        if (from === me || to === me) {
-          chunk.push({
-            type: from === me ? 'Sent' : 'Received',
-            amount: event.args.amount,
-            hash: event.transactionHash,
-            block: event.blockNumber
-          });
-        }
-      });
+        if (added > 0 || historyNextToBlock < 0) break;
+      }
 
-      const before = historyRows.length;
-      historyRows = historyRows.concat(chunk);
-      historyRows.sort((a, b) => b.block - a.block);
-      historyRows = historyRows.filter((row, index, all) =>
-        index === all.findIndex((other) => other.hash === row.hash && other.type === row.type)
-      );
-
-      historyNextToBlock = fromBlock - 1;
       renderActivity(historyRows);
 
       if (els.historySummary) {
-        const added = historyRows.length - before;
-        const range = `blocks ${fromBlock.toLocaleString()}–${toBlock.toLocaleString()}`;
-        els.historySummary.textContent = added
-          ? `${historyRows.length} transaction(s) loaded · ${range}`
-          : `No older transactions for this wallet in ${range}. You can continue loading older blocks.`;
+        els.historySummary.textContent = added > 0
+          ? `${historyRows.length} transaction(s) loaded · searched ${chunksScanned} block range(s)`
+          : `No additional transactions found in the last ${chunksScanned} block range(s).`;
       }
 
       if (els.loadHistoryBtn) {
@@ -390,10 +509,10 @@
       }
     } catch (error) {
       if (els.historySummary) {
-        els.historySummary.textContent = 'Transaction history could not be loaded from the current Sepolia provider.';
+        els.historySummary.textContent = 'History provider query failed. Run System Check or Refresh All and try again.';
       }
       if (els.loadHistoryBtn) els.loadHistoryBtn.disabled = false;
-      status('Transaction history could not be loaded. Try Refresh again.');
+      throw error;
     } finally {
       historyLoading = false;
       if (els.loadHistoryBtn && historyNextToBlock >= 0) {
@@ -412,10 +531,18 @@
 
   async function validateWalletAmount(value) {
     const walletBalance = await provider.getBalance(userAddress);
-    if (value > walletBalance) {
-      throw new Error('Amount exceeds your MetaMask wallet balance.');
+    if (value >= walletBalance) {
+      throw new Error('Leave some ETH in MetaMask for gas fees.');
     }
     return walletBalance;
+  }
+
+  async function validateContractAccountAmount(value) {
+    const balance = await contract.balances(userAddress);
+    if (value > balance) {
+      throw new Error('Amount exceeds your Ayu contract account balance.');
+    }
+    return balance;
   }
 
   async function runTransaction(label, action) {
@@ -460,6 +587,7 @@
   async function withdrawETH() {
     try {
       const value = getAmount('withdrawAmount');
+      await validateContractAccountAmount(value);
       const tx = await runTransaction('Withdrawal', () => contract.withdraw(value));
 
       if (!tx) return;
@@ -480,6 +608,7 @@
       }
 
       const value = getAmount('sendAmount');
+      await validateContractAccountAmount(value);
       const tx = await runTransaction(
         'Transfer',
         () => contract.transferFunds(receiver, value)
@@ -629,6 +758,8 @@
     $('viewAllBtn')?.addEventListener('click', () => loadHistoryChunk(true));
     $('loadHistoryBtn')?.addEventListener('click', () => loadHistoryChunk(false));
     $('refreshHealthBtn')?.addEventListener('click', loadHealth);
+    els.refreshAllBtn?.addEventListener('click', refreshAll);
+    els.systemCheckBtn?.addEventListener('click', runSystemCheck);
     $('refreshContactBtn')?.addEventListener('click', checkTrustedContact);
     $('addContactBtn')?.addEventListener('click', addTrustedContact);
     $('removeContactBtn')?.addEventListener('click', removeTrustedContact);
