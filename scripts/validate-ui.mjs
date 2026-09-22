@@ -71,3 +71,10 @@ assert(js.includes("contract.owner()"), "owner check exists for privileged contr
 assert(js.includes("validateContractAccountAmount"), "withdraw/send balance checks exist");
 assert(js.includes("window.open"), "view contract action opens explorer");
 assert(css.includes(".status-toolbar"), "diagnostic toolbar styling exists");
+
+assert(js.includes("ensureWalletConnected"), "buttons can request a MetaMask connection");
+assert(js.includes("eth_requestAccounts"), "MetaMask transaction actions can request an account");
+assert(js.includes("autoConnectIfAuthorized"), "authorized MetaMask sessions auto-connect");
+assert(js.includes("Trusted contact removed. Your wallet remains connected."), "remove action removes only the trusted address");
+assert(css.includes("button{cursor:pointer}"), "interactive controls use pointer cursor");
+assert(html.includes('id="removeContactBtn" type="button"'), "remove address control is an explicit button");
