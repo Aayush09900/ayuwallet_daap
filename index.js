@@ -162,7 +162,6 @@
 
       await refreshDashboard();
       status('Wallet connected.');
-      await loadHistoryChunk(true);
     } catch (error) {
       resetWalletUI();
       status(friendlyError(error, 'Wallet connection failed.'));
@@ -199,7 +198,7 @@
       loadBalances(),
       loadStatistics(),
       loadHealth(),
-      loadRecentActivity()
+      loadHistoryChunk(true)
     ]);
   }
 
