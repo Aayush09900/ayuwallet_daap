@@ -150,32 +150,56 @@
     if (code === '0x') throw new Error('Configured Ayu Wallet contract was not found on Sepolia.');
   }
 
-  async function connectWallet() {
-    if (!hasMetaMask()) return;
+  async function ensureWalletConnected({ request = false } = {}) {
+    if (!hasMetaMask()) return false;
+    if (provider && signer && contract && userAddress) return true;
 
     try {
-      status('Connecting wallet...');
-      await loadABI();
-      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      let accounts = await window.ethereum.request({ method: 'eth_accounts' });
+
+      if (!accounts.length && request) {
+        accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      }
+
+      if (!accounts.length) {
+        status('Connect MetaMask to continue.');
+        return false;
+      }
+
       await ensureSepolia();
 
       provider = new ethers.BrowserProvider(window.ethereum);
       signer = await provider.getSigner();
-      userAddress = await signer.getAddress();
-      contract = new ethers.Contract(CONTRACT_ADDRESS, abi, signer);
+      userAddress = accounts[0];
+      contract = new ethers.Contract(CONTRACT_ADDRESS, abi || await loadABI(), signer);
 
       await verifyContract();
 
       setText(els.address, shortAddress(userAddress));
       setText(els.receiveAddress, userAddress);
       setText(els.healthContractTop, shortAddress(CONTRACT_ADDRESS));
-
       if (els.connect) els.connect.textContent = shortAddress(userAddress);
       if (els.networkLabel) els.networkLabel.textContent = 'Sepolia Testnet';
       if (els.networkDot) els.networkDot.style.background = 'var(--success)';
 
+      return true;
+    } catch (error) {
+      status(friendlyError(error, 'Could not connect to MetaMask.'));
+      return false;
+    }
+  }
+
+  async function connectWallet() {
+    if (!hasMetaMask()) return;
+
+    status('Connecting MetaMask...');
+    try {
+      await loadABI();
+
+      if (!(await ensureWalletConnected({ request: true }))) return;
+
       await refreshDashboard();
-      status('Wallet connected.');
+      status('MetaMask connected.');
     } catch (error) {
       resetWalletUI();
       status(friendlyError(error, 'Wallet connection failed.'));
@@ -668,7 +692,10 @@
       () => contract.removeTrustedContact(address)
     );
 
-    if (tx) await checkTrustedContact();
+    if (tx) {
+      els.contactAddress.value = '';
+      setText(els.contactStatus, 'Trusted contact removed. Your wallet remains connected.');
+    }
   }
 
   async function setFrozenState(freeze) {
@@ -707,23 +734,26 @@
     $('connectWalletBtn')?.addEventListener('click', connectWallet);
     els.matrixToggle?.addEventListener('click', toggleMatrixMode);
 
-    $('sendBtn')?.addEventListener('click', () => (
-      userAddress ? openModal('sendModal') : status('Connect wallet first.')
-    ));
+    $('sendBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      openModal('sendModal');
+    });
 
-    $('receiveBtn')?.addEventListener('click', () => (
-      userAddress ? openModal('receiveModal') : status('Connect wallet first.')
-    ));
+    $('receiveBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      openModal('receiveModal');
+    });
 
     $('depositBtn')?.addEventListener('click', async () => {
-      if (!userAddress) return status('Connect wallet first.');
+      if (!(await ensureWalletConnected({ request: true }))) return;
       await loadBalances();
       openModal('depositModal');
     });
 
-    $('withdrawBtn')?.addEventListener('click', () => (
-      userAddress ? openModal('withdrawModal') : status('Connect wallet first.')
-    ));
+    $('withdrawBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      openModal('withdrawModal');
+    });
 
     $('confirmSend')?.addEventListener('click', sendETH);
     $('confirmDeposit')?.addEventListener('click', addBalanceToContract);
@@ -755,16 +785,47 @@
         $(button)?.addEventListener('click', () => closeModal(modal));
       });
 
-    $('viewAllBtn')?.addEventListener('click', () => loadHistoryChunk(true));
-    $('loadHistoryBtn')?.addEventListener('click', () => loadHistoryChunk(false));
-    $('refreshHealthBtn')?.addEventListener('click', loadHealth);
-    els.refreshAllBtn?.addEventListener('click', refreshAll);
-    els.systemCheckBtn?.addEventListener('click', runSystemCheck);
-    $('refreshContactBtn')?.addEventListener('click', checkTrustedContact);
-    $('addContactBtn')?.addEventListener('click', addTrustedContact);
-    $('removeContactBtn')?.addEventListener('click', removeTrustedContact);
-    $('freezeBtn')?.addEventListener('click', () => setFrozenState(true));
-    $('unfreezeBtn')?.addEventListener('click', () => setFrozenState(false));
+    $('viewAllBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await loadHistoryChunk(true);
+    });
+    $('loadHistoryBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await loadHistoryChunk(false);
+    });
+    $('refreshHealthBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await loadHealth();
+      status('Contract health refreshed.');
+    });
+    els.refreshAllBtn?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await refreshAll();
+    });
+    els.systemCheckBtn?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await runSystemCheck();
+    });
+    $('refreshContactBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await checkTrustedContact();
+    });
+    $('addContactBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await addTrustedContact();
+    });
+    $('removeContactBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await removeTrustedContact();
+    });
+    $('freezeBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await setFrozenState(true);
+    });
+    $('unfreezeBtn')?.addEventListener('click', async () => {
+      if (!(await ensureWalletConnected({ request: true }))) return;
+      await setFrozenState(false);
+    });
 
     document.querySelectorAll('.modal').forEach((modal) => {
       modal.addEventListener('click', (event) => {
@@ -791,6 +852,30 @@
     window.ethereum.on('chainChanged', () => window.location.reload());
   }
 
+  async function autoConnectIfAuthorized() {
+    if (!hasMetaMask()) return;
+    try {
+      await loadABI();
+      if (!(await ensureWalletConnected({ request: false }))) {
+        status('Wallet not connected. Click Connect Wallet or any action to open MetaMask.');
+        return;
+      }
+      await refreshDashboard();
+      status('MetaMask wallet ready.');
+    } catch {
+      resetWalletUI();
+      status('Wallet not connected.');
+    }
+  }
+
+  window.addEventListener('error', () => {
+    status('Ayu Wallet encountered a UI error. Run System Check.');
+  });
+
+  window.addEventListener('unhandledrejection', () => {
+    status('Ayu Wallet encountered an async error. Run System Check.');
+  });
+
   document.addEventListener('DOMContentLoaded', () => {
     initMatrixMode();
     wireUI();
@@ -798,6 +883,9 @@
 
     setText(els.healthContract, shortAddress(CONTRACT_ADDRESS));
     setText(els.healthContractTop, shortAddress(CONTRACT_ADDRESS));
-    status('Wallet not connected.');
+    if (els.freezeBtn) els.freezeBtn.disabled = true;
+    if (els.unfreezeBtn) els.unfreezeBtn.disabled = true;
+    status('Loading wallet...');
+    autoConnectIfAuthorized();
   });
 })();
