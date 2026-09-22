@@ -24,6 +24,9 @@
     walletBalance: $('walletBalance'),
     contractUserBalance: $('contractUserBalance'),
     contractBalance: $('contractBalance'),
+    contractBalanceTop: $('contractBalanceTop'),
+    historySummary: $('historySummary'),
+    viewContractBtn: $('viewContractBtn'),
     healthContractTop: $('healthContractTop'),
     receiveAddress: $('receiveAddress'),
     deposits: $('depositCount'),
@@ -176,10 +179,12 @@
     setText(els.walletBalance, '0.0000');
     setText(els.contractUserBalance, '0.0000');
     setText(els.contractBalance, '0.0000 ETH');
+    setText(els.contractBalanceTop, '0.0000');
     setText(els.deposits, '0.0000 ETH');
     setText(els.withdrawals, '0.0000 ETH');
     setText(els.transfers, '0');
     setText(els.healthContractTop, shortAddress(CONTRACT_ADDRESS));
+    setText(els.contractBalanceTop, '0.0000');
     setText(els.healthFrozen, '—');
     setText(els.healthOwner, 'Contract status will appear after connection.');
     setText(els.depositAvailability, 'Available wallet balance: —');
@@ -222,6 +227,7 @@
     ]);
 
     setText(els.contractBalance, `${formatEth(contractValue)} ETH`);
+    setText(els.contractBalanceTop, formatEth(contractValue));
     setText(els.deposits, `${formatEth(deposited)} ETH`);
     setText(els.withdrawals, `${formatEth(withdrawn)} ETH`);
     setText(els.transfers, transfers.toString());
@@ -326,41 +332,41 @@
       const fromBlock = Math.max(0, toBlock - HISTORY_CHUNK + 1);
       const me = userAddress.toLowerCase();
 
+      // Query unparameterized event filters and filter client-side.
+      // This is more reliable across providers than relying on indexed filter encoding.
       const [deposits, withdrawals, transfers] = await Promise.all([
-        contract.queryFilter(contract.filters.Deposit(userAddress), fromBlock, toBlock),
-        contract.queryFilter(contract.filters.Withdraw(userAddress), fromBlock, toBlock),
+        contract.queryFilter(contract.filters.Deposit(), fromBlock, toBlock),
+        contract.queryFilter(contract.filters.Withdraw(), fromBlock, toBlock),
         contract.queryFilter(contract.filters.TransferFunds(), fromBlock, toBlock)
       ]);
 
       const chunk = [];
+      deposits.forEach((event) => {
+        if (event.args.user.toLowerCase() === me) {
+          chunk.push({ type: 'Deposit', amount: event.args.amount, hash: event.transactionHash, block: event.blockNumber });
+        }
+      });
 
-      deposits.forEach((event) => chunk.push({
-        type: 'Deposit',
-        amount: event.args.amount,
-        hash: event.transactionHash,
-        block: event.blockNumber
-      }));
+      withdrawals.forEach((event) => {
+        if (event.args.user.toLowerCase() === me) {
+          chunk.push({ type: 'Withdraw', amount: event.args.amount, hash: event.transactionHash, block: event.blockNumber });
+        }
+      });
 
-      withdrawals.forEach((event) => chunk.push({
-        type: 'Withdraw',
-        amount: event.args.amount,
-        hash: event.transactionHash,
-        block: event.blockNumber
-      }));
+      transfers.forEach((event) => {
+        const from = event.args.from.toLowerCase();
+        const to = event.args.to.toLowerCase();
+        if (from === me || to === me) {
+          chunk.push({
+            type: from === me ? 'Sent' : 'Received',
+            amount: event.args.amount,
+            hash: event.transactionHash,
+            block: event.blockNumber
+          });
+        }
+      });
 
-      transfers
-        .filter((event) => {
-          const from = event.args?.from?.toLowerCase();
-          const to = event.args?.to?.toLowerCase();
-          return from === me || to === me;
-        })
-        .forEach((event) => chunk.push({
-          type: event.args.from.toLowerCase() === me ? 'Sent' : 'Received',
-          amount: event.args.amount,
-          hash: event.transactionHash,
-          block: event.blockNumber
-        }));
-
+      const before = historyRows.length;
       historyRows = historyRows.concat(chunk);
       historyRows.sort((a, b) => b.block - a.block);
       historyRows = historyRows.filter((row, index, all) =>
@@ -370,11 +376,22 @@
       historyNextToBlock = fromBlock - 1;
       renderActivity(historyRows);
 
+      if (els.historySummary) {
+        const added = historyRows.length - before;
+        const range = `blocks ${fromBlock.toLocaleString()}–${toBlock.toLocaleString()}`;
+        els.historySummary.textContent = added
+          ? `${historyRows.length} transaction(s) loaded · ${range}`
+          : `No older transactions for this wallet in ${range}. You can continue loading older blocks.`;
+      }
+
       if (els.loadHistoryBtn) {
         els.loadHistoryBtn.disabled = historyNextToBlock < 0;
         els.loadHistoryBtn.textContent = historyNextToBlock < 0 ? 'History Complete' : 'Load Older';
       }
-    } catch {
+    } catch (error) {
+      if (els.historySummary) {
+        els.historySummary.textContent = 'Transaction history could not be loaded from the current Sepolia provider.';
+      }
       if (els.loadHistoryBtn) els.loadHistoryBtn.disabled = false;
       status('Transaction history could not be loaded. Try Refresh again.');
     } finally {
@@ -581,6 +598,10 @@
 
     $('confirmSend')?.addEventListener('click', sendETH);
     $('confirmDeposit')?.addEventListener('click', addBalanceToContract);
+    els.viewContractBtn?.addEventListener('click', () => {
+      window.open(`${CONFIG.explorerBaseUrl}/address/${CONTRACT_ADDRESS}`, '_blank', 'noopener,noreferrer');
+    });
+
     els.preset25Btn?.addEventListener('click', () => {
       const input = $('depositAmount');
       if (input) {
