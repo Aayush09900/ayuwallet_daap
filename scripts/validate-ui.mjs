@@ -25,6 +25,8 @@ JSON.parse(abiText);
 
 assert(html.includes('id="walletBalance"'), "wallet balance card exists");
 assert(html.includes('id="contractUserBalance"'), "user contract balance card exists");
+assert(html.includes('id="contractBalanceTop"'), "live contract balance is prominent in the top card");
+assert(html.includes('25.0000 ETH'), "25 ETH target is displayed separately from live balance");
 assert(html.includes('id="contractBalance"'), "live contract TVL metric exists");
 assert(!html.includes("60.0000 ETH"), "no demo contract balance is present");
 assert(html.includes("Live Contract TVL"), "frontend uses a live contract TVL label");
@@ -34,6 +36,9 @@ assert(html.includes('id="matrixToggle"'), "matrix view toggle exists");
 
 assert(js.includes("provider.getBalance(userAddress)"), "wallet balance reads from connected wallet");
 assert(js.includes("contract.balances(userAddress)"), "contract account balance reads from contract");
+assert(js.includes("contract.getContractBalance()"), "live contract balance reads from chain");
+assert(js.includes("contract.filters.Deposit()"), "history uses unparameterized deposit event filters");
+assert(js.includes("historyNextToBlock"), "history supports older block ranges");
 assert(js.includes("setText(els.walletBalance"), "wallet balance renders into wallet card");
 assert(js.includes("setText(els.contractUserBalance"), "contract account balance renders into contract card");
 
@@ -42,6 +47,7 @@ assert(css.includes(".matrix-grid"), "matrix view styling exists");
 assert(css.includes(".matrix-mode"), "matrix mode state styling exists");
 assert(css.includes(".privacy-grid"), "privacy security panel styling exists");
 assert(css.includes(".activity-row"), "safe activity row styling exists");
+assert(css.includes(".contract-submetrics"), "contract account and target remain visually separate");
 
 assert(!/PRIVATE_KEY\s*=|API_KEY\s*=|SECRET\s*=/i.test(config), "config contains no credential assignments");
 assert(!/PRIVATE_KEY\s*=|API_KEY\s*=|SECRET\s*=/i.test(js), "frontend JS contains no credential assignments");
