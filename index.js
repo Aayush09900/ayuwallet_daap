@@ -10,6 +10,10 @@
   let contract = null;
   let userAddress = null;
   let abi = null;
+  let historyNextToBlock = null;
+  let historyRows = [];
+  let historyLoading = false;
+  const HISTORY_CHUNK = 5000;
 
   const $ = (id) => document.getElementById(id);
   const els = {
@@ -28,6 +32,9 @@
     networkLabel: $('networkLabel'),
     networkDot: $('networkDot'),
     activity: $('activityList'),
+    loadHistoryBtn: $('loadHistoryBtn'),
+    preset25Btn: $('preset25Btn'),
+    target25Status: $('target25Status'),
     healthNetwork: $('healthNetwork'),
     healthFrozen: $('healthFrozen'),
     healthContract: $('healthContract'),
@@ -155,6 +162,7 @@
 
       await refreshDashboard();
       status('Wallet connected.');
+      await loadHistoryChunk(true);
     } catch (error) {
       resetWalletUI();
       status(friendlyError(error, 'Wallet connection failed.'));
@@ -177,6 +185,9 @@
     setText(els.healthOwner, 'Contract status will appear after connection.');
     setText(els.depositAvailability, 'Available wallet balance: —');
     setText(els.contactStatus, 'No contact checked. Trusted contacts are on-chain and publicly observable.');
+    historyNextToBlock = null;
+    historyRows = [];
+    if (els.loadHistoryBtn) els.loadHistoryBtn.disabled = false;
 
     if (els.connect) els.connect.textContent = 'Connect Wallet';
     if (els.networkDot) els.networkDot.style.background = 'var(--danger)';
@@ -215,6 +226,16 @@
     setText(els.deposits, `${formatEth(deposited)} ETH`);
     setText(els.withdrawals, `${formatEth(withdrawn)} ETH`);
     setText(els.transfers, transfers.toString());
+
+    const target25 = ethers.parseEther('25');
+    if (els.target25Status) {
+      if (contractValue >= target25) {
+        els.target25Status.textContent = '25 ETH target reached on-chain.';
+      } else {
+        const remaining = target25 - contractValue;
+        els.target25Status.textContent = `25 ETH target: ${formatEth(remaining)} ETH still required on-chain.`;
+      }
+    }
   }
 
   async function loadHealth() {
@@ -260,7 +281,7 @@
       return;
     }
 
-    rows.slice(0, 10).forEach((row) => {
+    rows.slice(0, 50).forEach((row) => {
       const item = document.createElement('div');
       item.className = 'activity-row';
 
@@ -290,29 +311,38 @@
     });
   }
 
-  async function loadRecentActivity() {
-    if (!provider || !contract || !userAddress) return;
+  async function loadHistoryChunk(reset = false) {
+    if (!provider || !contract || !userAddress || historyLoading) return;
+
+    historyLoading = true;
+    if (els.loadHistoryBtn) els.loadHistoryBtn.disabled = true;
 
     try {
-      const latest = await provider.getBlockNumber();
-      const fromBlock = Math.max(0, latest - 10000);
+      if (reset || historyNextToBlock === null) {
+        historyNextToBlock = await provider.getBlockNumber();
+        historyRows = [];
+      }
+
+      const toBlock = historyNextToBlock;
+      const fromBlock = Math.max(0, toBlock - HISTORY_CHUNK + 1);
       const me = userAddress.toLowerCase();
-      const rows = [];
 
       const [deposits, withdrawals, transfers] = await Promise.all([
-        contract.queryFilter(contract.filters.Deposit(userAddress), fromBlock, latest),
-        contract.queryFilter(contract.filters.Withdraw(userAddress), fromBlock, latest),
-        contract.queryFilter(contract.filters.TransferFunds(), fromBlock, latest)
+        contract.queryFilter(contract.filters.Deposit(userAddress), fromBlock, toBlock),
+        contract.queryFilter(contract.filters.Withdraw(userAddress), fromBlock, toBlock),
+        contract.queryFilter(contract.filters.TransferFunds(), fromBlock, toBlock)
       ]);
 
-      deposits.forEach((event) => rows.push({
+      const chunk = [];
+
+      deposits.forEach((event) => chunk.push({
         type: 'Deposit',
         amount: event.args.amount,
         hash: event.transactionHash,
         block: event.blockNumber
       }));
 
-      withdrawals.forEach((event) => rows.push({
+      withdrawals.forEach((event) => chunk.push({
         type: 'Withdraw',
         amount: event.args.amount,
         hash: event.transactionHash,
@@ -325,28 +355,34 @@
           const to = event.args?.to?.toLowerCase();
           return from === me || to === me;
         })
-        .forEach((event) => rows.push({
+        .forEach((event) => chunk.push({
           type: event.args.from.toLowerCase() === me ? 'Sent' : 'Received',
           amount: event.args.amount,
           hash: event.transactionHash,
           block: event.blockNumber
         }));
 
-      rows.sort((a, b) => b.block - a.block);
-      renderActivity(rows);
+      historyRows = historyRows.concat(chunk);
+      historyRows.sort((a, b) => b.block - a.block);
+      historyRows = historyRows.filter((row, index, all) =>
+        index === all.findIndex((other) => other.hash === row.hash && other.type === row.type)
+      );
+
+      historyNextToBlock = fromBlock - 1;
+      renderActivity(historyRows);
+
+      if (els.loadHistoryBtn) {
+        els.loadHistoryBtn.disabled = historyNextToBlock < 0;
+        els.loadHistoryBtn.textContent = historyNextToBlock < 0 ? 'History Complete' : 'Load Older';
+      }
     } catch {
-      clearActivity();
-      const wrapper = document.createElement('div');
-      wrapper.className = 'empty-state';
-
-      const title = document.createElement('p');
-      title.textContent = 'Activity temporarily unavailable';
-
-      const note = document.createElement('span');
-      note.textContent = 'Refresh after the Sepolia provider responds.';
-
-      wrapper.append(title, note);
-      els.activity.appendChild(wrapper);
+      if (els.loadHistoryBtn) els.loadHistoryBtn.disabled = false;
+      status('Transaction history could not be loaded. Try Refresh again.');
+    } finally {
+      historyLoading = false;
+      if (els.loadHistoryBtn && historyNextToBlock >= 0) {
+        els.loadHistoryBtn.disabled = false;
+      }
     }
   }
 
@@ -546,6 +582,13 @@
 
     $('confirmSend')?.addEventListener('click', sendETH);
     $('confirmDeposit')?.addEventListener('click', addBalanceToContract);
+    els.preset25Btn?.addEventListener('click', () => {
+      const input = $('depositAmount');
+      if (input) {
+        input.value = '25';
+        input.focus();
+      }
+    });
     $('confirmWithdraw')?.addEventListener('click', withdrawETH);
 
     $('copyAddress')?.addEventListener('click', async () => {
@@ -563,7 +606,8 @@
         $(button)?.addEventListener('click', () => closeModal(modal));
       });
 
-    $('viewAllBtn')?.addEventListener('click', loadRecentActivity);
+    $('viewAllBtn')?.addEventListener('click', () => loadHistoryChunk(true));
+    $('loadHistoryBtn')?.addEventListener('click', () => loadHistoryChunk(false));
     $('refreshHealthBtn')?.addEventListener('click', loadHealth);
     $('refreshContactBtn')?.addEventListener('click', checkTrustedContact);
     $('addContactBtn')?.addEventListener('click', addTrustedContact);
